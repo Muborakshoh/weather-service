@@ -18,17 +18,14 @@ spec:
       - name: frontend
         image: docker.io/i20020309/weather-service-frontend:latest
         ports:
-        - containerPort: 3000
-        env:
-        - name: CHOKIDAR_USEPOLLING
-          value: "true"
+        - containerPort: 80
         resources:
           requests:
             memory: "256Mi"
-            cpu: "200m"  # 0.2 CPU
+            cpu: "200m"
           limits:
             memory: "512Mi"
-            cpu: "500m"  # 0.5 CPU
+            cpu: "500m"
 ---
 apiVersion: v1
 kind: Service
@@ -38,6 +35,6 @@ spec:
   selector:
     app: frontend
   ports:
-  - port: 3000
-    targetPort: 3000
+  - port: 80
+    targetPort: 80
   type: LoadBalancer
