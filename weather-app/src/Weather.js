@@ -15,17 +15,27 @@ const Weather = () => {
   const fetchWeather = async () => {
     try {
       console.log(`Fetching weather for ${city} with lang=${language}`);
-      const response = await axios.get(`/forecast/${city}`, {
+      const response = await axios.get(`http://backend:8000/weather?city=${city}`, {
         params: { lang: language },
       });
       console.log('Response:', response.data);
-      setWeather(response.data);
+      // Адаптируем данные, так как backend возвращает текущую погоду, а не прогноз
+      const weatherData = {
+        city: city,
+        forecast: [{
+          date: new Date().toISOString().split('T')[0],
+          temperature: response.data.main.temp,
+          description: response.data.weather[0].description,
+          icon: response.data.weather[0].icon,
+        }],
+        fromCache: false,
+      };
+      setWeather(weatherData);
       setError(null);
       fetchHistory();
     } catch (err) {
       console.error('Error:', err);
       if (err.response) {
-        // Ошибка от сервера (например, 404 или 500)
         setError(
           language === 'ru'
             ? err.response.status === 404
@@ -36,7 +46,6 @@ const Weather = () => {
             : 'Server error'
         );
       } else {
-        // Ошибка сети или другая
         setError(language === 'ru' ? 'Ошибка сети' : 'Network error');
       }
       setWeather(null);
@@ -45,18 +54,17 @@ const Weather = () => {
 
   const fetchHistory = async () => {
     try {
-      const response = await axios.get('/weather_history', {
+      const response = await axios.get('http://backend:8000/weather_history', {
         params: { limit: 14 },
       });
       console.log('History response:', response.data);
-      setHistory(response.data.history);
+      setHistory(response.data.history || []);
     } catch (err) {
       console.error('History fetch error:', err.message);
       setHistory([]);
     }
   };
 
-  // Функция translateDescription больше не нужна, так как бэкенд возвращает описание на нужном языке
   const translateDescription = (description) => description;
 
   const renderChartView = () => (
@@ -104,7 +112,6 @@ const Weather = () => {
   );
 
   const renderHistory = () => {
-    // Группируем записи по 7 (неделя)
     const rows = [];
     for (let i = 0; i < history.length; i += 7) {
       rows.push(history.slice(i, i + 7));
@@ -123,7 +130,7 @@ const Weather = () => {
                   justifyContent: 'center',
                   gap: 2,
                   marginBottom: 2,
-                  flexWrap: 'wrap', // Для адаптивности
+                  flexWrap: 'wrap',
                 }}
               >
                 {row.map((entry, index) => {
@@ -161,7 +168,6 @@ const Weather = () => {
                     </Box>
                   );
                 })}
-                {/* Заполняем пустые ячейки, если в ряду меньше 7 записей */}
                 {Array.from({ length: 7 - row.length }).map((_, index) => (
                   <Box
                     key={`empty-${index}`}
