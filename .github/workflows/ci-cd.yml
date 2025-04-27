@@ -1,0 +1,104 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Чекаут репозитория
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Установка Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 3. Аутентификация в Docker Hub
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 4. Сборка и пуш Docker-образов
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-backend:${{ github.sha }}
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./weather-app
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-frontend:${{ github.sha }}
+
+      - name: Build and push bot image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./bot
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-bot:${{ github.sha }}
+
+      # 5. Аутентификация в Google Cloud
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      # 6. Установка Google Cloud SDK
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      # 7. Установка gke-gcloud-auth-plugin
+      - name: Install gke-gcloud-auth-plugin
+        run: |
+          gcloud components install gke-gcloud-auth-plugin --quiet
+          which gke-gcloud-auth-plugin || echo "gke-gcloud-auth-plugin not found in PATH"
+
+      # 8. Получение учетных данных для GKE
+      - name: Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials weather-service-cluster --region us-central1
+
+      # 9. Создание секрета в Kubernetes
+      - name: Create Kubernetes secret
+        run: |
+          kubectl create secret generic weather-secrets \
+            --from-literal=openweathermap-api-key=${{ secrets.OPENWEATHERMAP_API_KEY }} \
+            --from-literal=telegram-token=${{ secrets.TELEGRAM_TOKEN }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      # 10. Обновление манифестов с новым тегом образов
+      - name: Update image tags in manifests
+        run: |
+          sed -i "s|${{ secrets.DOCKERHUB_USERNAME }}/weather-service-backend:latest|${{ secrets.DOCKERHUB_USERNAME }}/weather-service-backend:${{ github.sha }}|g" k8s/backend-deployment.yaml
+          sed -i "s|${{ secrets.DOCKERHUB_USERNAME }}/weather-service-frontend:latest|${{ secrets.DOCKERHUB_USERNAME }}/weather-service-frontend:${{ github.sha }}|g" k8s/frontend-deployment.yaml
+          sed -i "s|${{ secrets.DOCKERHUB_USERNAME }}/weather-service-bot:latest|${{ secrets.DOCKERHUB_USERNAME }}/weather-service-bot:${{ github.sha }}|g" k8s/bot-deployment.yaml
+
+      # 11. Деплой в Kubernetes
+      - name: Deploy to Kubernetes
+        run: |
+          kubectl apply -f k8s/redis-deployment.yaml
+          kubectl apply -f k8s/prometheus-deployment.yaml
+          kubectl apply -f k8s/grafana-deployment.yaml
+          kubectl apply -f k8s/redis-exporter-deployment.yaml
+          kubectl apply -f k8s/backend-deployment.yaml
+          kubectl apply -f k8s/frontend-deployment.yaml
+          kubectl apply -f k8s/bot-deployment.yaml
+
+      # 12. Проверка статуса деплоя
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/backend
+          kubectl rollout status deployment/frontend
+          kubectl rollout status deployment/bot
