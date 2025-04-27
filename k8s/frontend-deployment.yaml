@@ -6,6 +6,7 @@ metadata:
     app: frontend
 spec:
   replicas: 1
+  progressDeadlineSeconds: 1200
   selector:
     matchLabels:
       app: frontend
@@ -14,18 +15,19 @@ spec:
       labels:
         app: frontend
     spec:
+      terminationGracePeriodSeconds: 60
       containers:
       - name: frontend
         image: docker.io/i20020309/weather-service-frontend:latest
         ports:
-        - containerPort: 80  # Исправляем порт на 80
+        - containerPort: 80
         resources:
           requests:
-            memory: "256Mi"
-            cpu: "200m"
+            memory: "64Mi"  # Уменьшаем с 128Mi до 64Mi
+            cpu: "50m"      # Уменьшаем с 100m до 50m
           limits:
-            memory: "512Mi"
-            cpu: "500m"
+            memory: "128Mi"  # Уменьшаем с 256Mi до 128Mi
+            cpu: "200m"      # Уменьшаем с 300m до 200m
 ---
 apiVersion: v1
 kind: Service
@@ -35,6 +37,6 @@ spec:
   selector:
     app: frontend
   ports:
-  - port: 80  # Исправляем порт на 80
+  - port: 80
     targetPort: 80
   type: LoadBalancer
