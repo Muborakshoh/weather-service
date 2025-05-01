@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Service</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background-color: #f0f4f8;
+            color: #333;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #1a73e8;
+            margin-bottom: 20px;
+        }
+
+        .search-section {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+
+        .search-section input {
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .search-section button {
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            background-color: #1a73e8;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .search-section button:hover {
+            background-color: #1557b0;
+        }
+
+        .forecast-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .weather-result, .history-section {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+
+        .weather-card {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .history-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .loading {
+            text-align: center;
+            font-size: 18px;
+            color: #1a73e8;
+            display: none;
+            margin: 20px 0;
+        }
+
+        .loading::after {
+            content: ".";
+            animation: dots 1.5s infinite;
+        }
+
+        @keyframes dots {
+            0% { content: "."; }
+            33% { content: ".."; }
+            66% { content: "..."; }
+        }
+
+        canvas {
+            margin: 20px 0;
+            max-width: 100%;
+        }
+
+        @media (max-width: 600px) {
+            .search-section {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .search-section input, .search-section button {
+                width: 100%;
+                max-width: 300px;
+            }
+
+            .forecast-buttons {
+                flex-direction: column;
+            }
+
+            .forecast-buttons button {
+                width: 100%;
+                max-width: 300px;
+            }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Weather Service</h1>
+
+        <div class="search-section">
+            <input type="text" id="cityInput" placeholder="Введите город (например, Moscow)" />
+            <button onclick="searchWeather()">Поиск</button>
+        </div>
+
+        <div class="forecast-buttons">
+            <button onclick="setForecastDays(7)">Прогноз на 7 дней</button>
+            <button onclick="setForecastDays(14)">Прогноз на 14 дней</button>
+            <button onclick="setForecastDays(30)">Прогноз на 30 дней</button>
+            <button onclick="showHistory()">Показать историю</button>
+        </div>
+
+        <div class="loading" id="loading">Загрузка</div>
+        <div class="weather-result" id="weatherResult"></div>
+        <canvas id="temperatureChart" style="display: none;"></canvas>
+        <div class="history-section" id="historySection"></div>
+    </div>
+
+    <script>
+        const BACKEND_URL = "http://backend:8000";
+        let forecastDays = 0;
+        let chart = null;
+
+        const WEATHER_EMOJIS = {
+            "clear": "☀️",
+            "clouds": "☁️",
+            "rain": "🌧️",
+            "snow": "❄️",
+            "thunderstorm": "⛈️",
+            "mist": "🌫️",
+            "drizzle": "🌦️"
+        };
+
+        function getFlagEmoji(countryCode) {
+            if (!countryCode) return "";
+            try {
+                const offset = 127397;
+                return String.fromCodePoint(countryCode.charCodeAt(0) + offset) +
+                       String.fromCodePoint(countryCode.charCodeAt(1) + offset);
+            } catch (e) {
+                return "";
+            }
+        }
+
+        function toggleLoading(show) {
+            document.getElementById("loading").style.display = show ? "block" : "none";
+        }
+
+        async function searchWeather() {
+            const cityInput = document.getElementById("cityInput").value.trim();
+            if (!cityInput) {
+                alert("Пожалуйста, введите название города.");
+                return;
+            }
+
+            toggleLoading(true);
+            const weatherResult = document.getElementById("weatherResult");
+            const temperatureChart = document.getElementById("temperatureChart");
+            weatherResult.innerHTML = "";
+            temperatureChart.style.display = "none";
+
+            try {
+                const url = `${BACKEND_URL}/forecast/${cityInput}${forecastDays ? `?days=${forecastDays}` : ""}&lang=ru`;
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+
+                const countryCode = data.country || "RU";
+                const flagEmoji = getFlagEmoji(countryCode);
+
+                let html = `<h3>${flagEmoji} Погода в ${data.city}</h3>`;
+                const temperatures = [];
+                const dates = [];
+
+                data.forecast.forEach(forecast => {
+                    const description = forecast.description.toLowerCase();
+                    const weatherEmoji = WEATHER_EMOJIS[description] || "🌍";
+                    html += `
+                        <div class="weather-card">
+                            <span>${weatherEmoji}</span>
+                            <span>${forecast.date}</span>
+                            <span>${forecast.description}</span>
+                            <span>${forecast.temperature}°C</span>
+                        </div>
+                    `;
+                    temperatures.push(forecast.temperature);
+                    dates.push(forecast.date.split(" ")[0]);
+                });
+
+                weatherResult.innerHTML = html;
+
+                if (chart) chart.destroy();
+                temperatureChart.style.display = "block";
+                const ctx = temperatureChart.getContext("2d");
+                chart = new Chart(ctx, {
+                    type: "line",
+                    data: {
+                        labels: dates,
+                        datasets: [{
+                            label: "Температура (°C)",
+                            data: temperatures,
+                            borderColor: "#1a73e8",
+                            fill: false,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                title: { display: true, text: "Температура (°C)" }
+                            },
+                            x: {
+                                title: { display: true, text: "Дата" }
+                            }
+                        }
+                    }
+                });
+
+                const history = JSON.parse(localStorage.getItem("weatherHistory")) || [];
+                history.unshift({
+                    city: data.city,
+                    date: new Date().toISOString(),
+                    forecast: data.forecast.slice(0, 1)
+                });
+                localStorage.setItem("weatherHistory", JSON.stringify(history.slice(0, 10)));
+
+            } catch (error) {
+                weatherResult.innerHTML = `<p>Ошибка: ${error.message}</p>`;
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        function setForecastDays(days) {
+            forecastDays = days;
+            searchWeather();
+        }
+
+        async function showHistory() {
+            toggleLoading(true);
+            const historySection = document.getElementById("historySection");
+            historySection.innerHTML = "";
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/weather_history?limit=10`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+
+                let html = "<h3>История поиска</h3>";
+                data.history.forEach(entry => {
+                    const countryCode = "RU";
+                    const flagEmoji = getFlagEmoji(countryCode);
+                    const description = entry.description.toLowerCase();
+                    const weatherEmoji = WEATHER_EMOJIS[description] || "🌍";
+                    html += `
+                        <div class="history-item">
+                            <p>${flagEmoji} Город: ${entry.city}</p>
+                            <p>Дата: ${entry.forecast_date}</p>
+                            <p>${weatherEmoji} Температура: ${entry.avg_temperature}°C, ${entry.description}</p>
+                            <p>Время запроса: ${entry.request_time}</p>
+                        </div>
+                    `;
+                });
+
+                const localHistory = JSON.parse(localStorage.getItem("weatherHistory")) || [];
+                if (localHistory.length > 0) {
+                    html += "<h3>Локальная история</h3>";
+                    localHistory.forEach(entry => {
+                        const forecast = entry.forecast[0];
+                        const description = forecast.description.toLowerCase();
+                        const weatherEmoji = WEATHER_EMOJIS[description] || "🌍";
+                        html += `
+                            <div class="history-item">
+                                <p>Город: ${entry.city}</p>
+                                <p>Дата: ${forecast.date}</p>
+                                <p>${weatherEmoji} Температура: ${forecast.temperature}°C, ${forecast.description}</p>
+                                <p>Время запроса: ${entry.date}</p>
+                            </div>
+                        `;
+                    });
+                }
+
+                historySection.innerHTML = html;
+
+            } catch (error) {
+                historySection.innerHTML = `<p>Ошибка загрузки истории: ${error.message}</p>`;
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        document.getElementById("cityInput").addEventListener("keypress", (e) => {
+            if (e.key === "Enter") {
+                searchWeather();
+            }
+        });
+    </script>
+</body>
+</html>

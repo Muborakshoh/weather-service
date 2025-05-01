@@ -5,7 +5,7 @@ metadata:
   labels:
     app: frontend
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: frontend
@@ -14,14 +14,19 @@ spec:
       labels:
         app: frontend
     spec:
+      terminationGracePeriodSeconds: 60
       containers:
       - name: frontend
-        image: docker.io/i20020309/weather-service-frontend:latest
+        image: docker.io/i20020309/weather-service-frontend:html-js-css
         ports:
-        - containerPort: 3000
-        env:
-        - name: CHOKIDAR_USEPOLLING
-          value: "true"
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "16Mi"
+            cpu: "10m"
+          limits:
+            memory: "32Mi"
+            cpu: "50m"
 ---
 apiVersion: v1
 kind: Service
@@ -31,6 +36,6 @@ spec:
   selector:
     app: frontend
   ports:
-  - port: 3000
-    targetPort: 3000
+  - port: 80
+    targetPort: 80
   type: LoadBalancer

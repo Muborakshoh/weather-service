@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: docker.io/i20020309/weather-service-backend:latest
+        image: docker.io/i20020309/weather-service-backend:updated-country
         ports:
         - containerPort: 8000
         env:
