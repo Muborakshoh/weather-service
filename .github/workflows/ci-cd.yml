@@ -65,8 +65,8 @@ jobs:
           # Проверка установки yc
           yc version
 
-          # Инициализация yc с токеном
-          yc init --token $YC_TOKEN --quiet
+          # Инициализация yc с токеном (удалён флаг --quiet)
+          yc config set token $YC_TOKEN
 
           # Получение credentials для kubectl
           yc managed-kubernetes cluster get-credentials --id $CLUSTER_ID --external --force
