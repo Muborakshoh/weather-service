@@ -55,9 +55,12 @@ jobs:
           CLUSTER_ID: ${{ secrets.CLUSTER_ID }}
           ZONE: ${{ secrets.ZONE }}
         run: |
-          # Установка yc CLI (альтернативный способ через официальный установщик)
+          # Установка yc CLI
           curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -a
-          export PATH=$PATH:/home/runner/bin
+          export PATH=$PATH:/home/runner/bin:/home/runner/yandex-cloud/bin
+
+          # Применение изменений PATH
+          source /home/runner/.bashrc
 
           # Проверка установки yc
           yc version
