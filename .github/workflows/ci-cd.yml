@@ -27,7 +27,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Сборка и пуш фронтенда (изменено frontend на weather-app)
+      # Сборка и пуш фронтенда
       - name: Build and push frontend image
         run: |
           cd weather-app
@@ -55,10 +55,14 @@ jobs:
           CLUSTER_ID: ${{ secrets.CLUSTER_ID }}
           ZONE: ${{ secrets.ZONE }}
         run: |
-          # Установка yc CLI
-          curl -L https://github.com/yandex-cloud/yc/releases/latest/download/yc-linux-amd64 > yc-linux-amd64
-          chmod +x yc-linux-amd64
-          sudo mv yc-linux-amd64 /usr/local/bin/yc
+          # Установка yc CLI (альтернативный способ через официальный установщик)
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -a
+          export PATH=$PATH:/home/runner/bin
+
+          # Проверка установки yc
+          yc version
+
+          # Инициализация yc с токеном
           yc init --token $YC_TOKEN --quiet
 
           # Получение credentials для kubectl
