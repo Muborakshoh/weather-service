@@ -2,8 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: bot
-  labels:
-    app: bot
+  namespace: weather-service
 spec:
   replicas: 1
   selector:
@@ -16,16 +15,33 @@ spec:
     spec:
       containers:
       - name: bot
-        image: docker.io/i20020309/weather-service-bot:latest
+        image: i20020309/weather-service-bot:latest
         env:
         - name: TELEGRAM_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: weather-secrets
-              key: telegram-token
+          value: "7999984759:AAHCcymHuj0sjpka3SbaZKc6E0vjua5wksE"
         - name: BACKEND_URL
           value: "http://backend:8000"
         - name: REDIS_HOST
           value: "redis"
         - name: REDIS_PORT
           value: "6379"
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "25m"
+          limits:
+            memory: "64Mi"
+            cpu: "50m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bot
+  namespace: weather-service
+spec:
+  selector:
+    app: bot
+  ports:
+  - port: 8001
+    targetPort: 8001
+  type: ClusterIP
