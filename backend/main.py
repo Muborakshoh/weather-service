@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 import requests
 import os
 import redis
@@ -17,6 +18,15 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 app = FastAPI()
+
+# Настройка CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8081"],  # Разрешаем запросы с фронтенда
+    allow_credentials=True,
+    allow_methods=["*"],  # Разрешаем все методы (GET, POST, etc.)
+    allow_headers=["*"],  # Разрешаем все заголовки
+)
 
 Instrumentator().instrument(app).expose(app)
 redis_cache_hits = PrometheusCounter(
@@ -103,6 +113,20 @@ async def get_forecast(city: str, lang: str = "en", days: int = None):
             logger.error(f"No forecast data ('list') in OpenWeatherMap response for city {city}")
             raise HTTPException(status_code=404, detail=f"No forecast data available for city '{city}'")
 
+        # Группируем данные по дням и выбираем одну запись на день (ближайшую к 12:00)
+        forecast_dict = {}
+        for item in data["list"]:
+            forecast_date = datetime.strptime(item["dt_txt"], "%Y-%m-%d %H:%M:%S")
+            day_key = forecast_date.strftime("%Y-%m-%d")
+            if day_key not in forecast_dict:
+                forecast_dict[day_key] = item
+            # Выбираем запись ближе к 12:00 (индекс 11:00-13:00)
+            current_hour = forecast_date.hour
+            existing_hour = datetime.strptime(forecast_dict[day_key]["dt_txt"], "%Y-%m-%d %H:%M:%S").hour
+            if abs(12 - current_hour) < abs(12 - existing_hour):
+                forecast_dict[day_key] = item
+
+        # Преобразуем в список, ограничиваем по дням
         forecast_list = [
             {
                 "date": item["dt_txt"],
@@ -110,13 +134,11 @@ async def get_forecast(city: str, lang: str = "en", days: int = None):
                 "description": item["weather"][0]["description"],
                 "icon": item["weather"][0]["icon"]
             }
-            for item in data["list"]
+            for day, item in forecast_dict.items()
         ]
-
-        if days:
-            target_date = datetime.strptime(forecast_list[0]["date"], "%Y-%m-%d %H:%M:%S")
-            end_date = target_date.replace(day=target_date.day + days)
-            forecast_list = [f for f in forecast_list if datetime.strptime(f["date"], "%Y-%m-%d %H:%M:%S") <= end_date]
+        days_limit = days if days else 7  # По умолчанию 7 дней
+        if len(forecast_list) > days_limit:
+            forecast_list = forecast_list[:days_limit]
 
         city_name = data.get("city", {}).get("name", city)
         country_code = data.get("city", {}).get("country", "N/A")

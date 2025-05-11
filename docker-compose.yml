@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   backend:
     build:
@@ -18,17 +20,15 @@ services:
 
   frontend:
     build:
-      context: ./weather-app
+      context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
-    volumes:
-      - ./weather-app:/app
+      - "8081:80"  # Изменён порт с 8080 на 8081
     depends_on:
       backend:
         condition: service_started
-    environment:
-      - CHOKIDAR_USEPOLLING=true
+    networks:
+      - weather-service-network
 
   bot:
     build:
@@ -105,3 +105,7 @@ volumes:
   redis_data:
   prometheus_data:
   grafana_data:
+
+networks:
+  weather-service-network:
+    driver: bridge

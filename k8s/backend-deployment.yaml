@@ -2,9 +2,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
-  namespace: weather-service
+  labels:
+    app: backend
 spec:
-  progressDeadlineSeconds: 1200
   replicas: 1
   selector:
     matchLabels:
@@ -16,29 +16,24 @@ spec:
     spec:
       containers:
       - name: backend
-        image: i20020309/weather-service-backend:updated-country
+        image: docker.io/i20020309/weather-service-backend:updated-country
         ports:
         - containerPort: 8000
         env:
         - name: OPENWEATHERMAP_API_KEY
-          value: "28ae605916a7261a20aa937e9a449651"
+          valueFrom:
+            secretKeyRef:
+              name: weather-secrets
+              key: openweathermap-api-key
         - name: REDIS_HOST
-          value: "redis"
+          value: redis
         - name: REDIS_PORT
           value: "6379"
-        resources:
-          requests:
-            memory: "32Mi"
-            cpu: "25m"
-          limits:
-            memory: "64Mi"
-            cpu: "50m"
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: backend
-  namespace: weather-service
 spec:
   selector:
     app: backend

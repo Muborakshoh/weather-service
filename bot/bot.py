@@ -26,16 +26,47 @@ redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=Tr
 
 LOG_KEY = "bot_request_logs"
 
-# Маппинг погодных условий на эмодзи
+# Обновлённый маппинг погодных условий на эмодзи
 WEATHER_EMOJIS = {
-    "Clear": "☀️",  # Солнечно
-    "Clouds": "☁️",  # Облачно
-    "Rain": "🌧️",   # Дождь
-    "Snow": "❄️",    # Снег
-    "Thunderstorm": "⛈️",  # Гроза
-    "Mist": "🌫️",    # Туман
-    "Drizzle": "🌦️", # Моросящий дождь
+    "clear": "☀️",
+    "clouds": "☁️",
+    "rain": "🌧️",
+    "light rain": "🌦️",
+    "moderate rain": "🌧️",
+    "heavy rain": "⛈️",
+    "snow": "❄️",
+    "thunderstorm": "⛈️",
+    "mist": "🌫️",
+    "drizzle": "🌦️",
+    "broken clouds": "☁️",
+    "scattered clouds": "🌥️",
+    "few clouds": "🌤️",
+    "overcast clouds": "☁️"
 }
+
+# Функция для получения эмодзи на основе описания
+def get_weather_emoji(description):
+    desc = description.lower()
+    # Проверяем точное совпадение
+    if desc in WEATHER_EMOJIS:
+        return WEATHER_EMOJIS[desc]
+    # Проверяем частичное совпадение
+    if "rain" in desc:
+        return "🌧️"
+    if "cloud" in desc:
+        return "☁️"
+    if "clear" in desc:
+        return "☀️"
+    if "snow" in desc:
+        return "❄️"
+    if "thunder" in desc:
+        return "⛈️"
+    if "mist" in desc or "fog" in desc:
+        return "🌫️"
+    if "drizzle" in desc:
+        return "🌦️"
+    # Дефолтный эмодзи — облако
+    return "🌦️"
 
 # Функция для получения эмодзи флага по коду страны
 def get_flag_emoji(country_code: str) -> str:
@@ -132,7 +163,9 @@ async def show_history(update: Update, context: ContextTypes.DEFAULT_TYPE, from_
 
         message = "История поиска:\n"
         for entry in history:
-            message += f"Город: {entry['city']}\nДата прогноза: {entry['forecast_date']}\nТемпература: {entry['avg_temperature']:.1f}°C\nОписание: {entry['description']}\nВремя запроса: {entry['request_time']}\n\n"
+            description = entry['description']
+            weather_emoji = get_weather_emoji(description)
+            message += f"Город: {entry['city']}\nДата прогноза: {entry['forecast_date']}\nТемпература: {entry['avg_temperature']:.1f}°C\nОписание: {weather_emoji} {entry['description']}\nВремя запроса: {entry['request_time']}\n\n"
 
         if from_callback:
             await update.callback_query.message.reply_text(message)
@@ -167,15 +200,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             country_code = data.get("country", "")
             flag_emoji = get_flag_emoji(country_code)
 
+            # Группируем прогноз по дням и выбираем одну запись на день (ближайшую к 12:00)
+            forecast_dict = {}
             for forecast in data["forecast"]:
+                forecast_date = datetime.strptime(forecast["date"], "%Y-%m-%d %H:%M:%S")
+                day_key = forecast_date.strftime("%Y-%m-%d")
+                if day_key not in forecast_dict:
+                    forecast_dict[day_key] = forecast
+                # Выбираем запись ближе к 12:00
+                current_hour = forecast_date.hour
+                existing_hour = datetime.strptime(forecast_dict[day_key]["date"], "%Y-%m-%d %H:%M:%S").hour
+                if abs(12 - current_hour) < abs(12 - existing_hour):
+                    forecast_dict[day_key] = forecast
+
+            # Преобразуем в список и ограничиваем по дням
+            forecast_list = list(forecast_dict.values())
+            if len(forecast_list) > days:
+                forecast_list = forecast_list[:days]
+
+            for forecast in forecast_list:
                 date = forecast.get("date", "N/A")
                 temperature = forecast.get("temperature", "N/A")
-                description = forecast.get("description", "N/A").capitalize()
-                weather_emoji = WEATHER_EMOJIS.get(description, "🌍")
-
-                message += (
-                    f"{flag_emoji} {date}: {weather_emoji} {description}, {temperature}°C\n"
-                )
+                description = forecast.get("description", "N/A")
+                weather_emoji = get_weather_emoji(description)
+                message += f"{flag_emoji} {date}: {weather_emoji} {description}, {temperature}°C\n"
 
             message += f"Данные {'из кэша' if data['fromCache'] else 'от OpenWeatherMap'}"
             await update.message.reply_text(message)
@@ -201,12 +249,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         country_code = data.get("country", "")
         flag_emoji = get_flag_emoji(country_code)
 
-        for forecast in data["forecast"][:5]:  # Показываем первые 5 записей (1 день)
+        # Группируем прогноз по дням и выбираем одну запись на день (ближайшую к 12:00) для текущего дня
+        forecast_dict = {}
+        for forecast in data["forecast"]:
+            forecast_date = datetime.strptime(forecast["date"], "%Y-%m-%d %H:%M:%S")
+            day_key = forecast_date.strftime("%Y-%m-%d")
+            if day_key not in forecast_dict:
+                forecast_dict[day_key] = forecast
+            current_hour = forecast_date.hour
+            existing_hour = datetime.strptime(forecast_dict[day_key]["date"], "%Y-%m-%d %H:%M:%S").hour
+            if abs(12 - current_hour) < abs(12 - existing_hour):
+                forecast_dict[day_key] = forecast
+
+        forecast_list = list(forecast_dict.values())[:1]  # Берем только первый день
+
+        for forecast in forecast_list:
             date = forecast.get("date", "N/A")
             temperature = forecast.get("temperature", "N/A")
-            description = forecast.get("description", "N/A").capitalize()
-            weather_emoji = WEATHER_EMOJIS.get(description, "🌍")
-
+            description = forecast.get("description", "N/A")
+            weather_emoji = get_weather_emoji(description)
             message += f"{flag_emoji} {date}: {weather_emoji} {description}, {temperature}°C\n"
 
         message += f"Данные {'из кэша' if data['fromCache'] else 'от OpenWeatherMap'}"
