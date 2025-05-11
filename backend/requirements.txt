@@ -6,3 +6,4 @@ python-dotenv==1.0.1
 prometheus-fastapi-instrumentator==7.0.0
 prometheus-client==0.20.0
 pytest
+httpx
