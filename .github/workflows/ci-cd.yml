@@ -46,5 +46,5 @@ jobs:
 
       - name: Build and push bot image
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-bot:latest ./bot
+          docker up --build -t ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-bot:latest ./bot
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-bot:latest
