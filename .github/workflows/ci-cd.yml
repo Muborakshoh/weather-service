@@ -26,12 +26,14 @@ jobs:
         run: docker-compose build
 
       - name: Run tests
-        run: docker-compose run --rm -w /app backend pytest tests/ -v
+        env:
+          OPENWEATHERMAP_API_KEY: ${{ secrets.OPENWEATHERMAP_API_KEY }}
+        run: docker-compose run --rm -w /app -e OPENWEATHERMAP_API_KEY=$OPENWEATHERMAP_API_KEY backend pytest tests/ -v
 
   publish-and-deploy:
     needs: build-and-test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'  # Выполняется только для ветки main
+    if: github.ref == 'refs/heads/main'  
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
