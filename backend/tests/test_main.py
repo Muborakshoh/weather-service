@@ -5,6 +5,7 @@ sys.path.append(os.path.abspath("/app"))
 from main import app
 from fastapi.testclient import TestClient
 
+# Создаём TestClient с позиционным аргументом
 client = TestClient(app)
 
 def test_get_forecast(mocker):
