@@ -69,14 +69,24 @@ jobs:
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-frontend:latest ./frontend
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-frontend:latest
 
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
       - name: Set up Google Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
+        uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Debug GCloud Auth
+        run: |
+          gcloud config list
+          gcloud auth list
 
       - name: Configure Docker for GCP
-        run: gcloud auth configure-docker ${{ secrets.GCP_REGION }}-docker.pkg.dev
+        run: gcloud auth configure-docker ${{ secrets.GCP_REGION }}-docker.pkg.dev --quiet
 
       - name: Get GKE credentials
         run: gcloud container clusters get-credentials ${{ secrets.GCP_CLUSTER_NAME }} --region ${{ secrets.GCP_REGION }} --project ${{ secrets.GCP_PROJECT_ID }}
