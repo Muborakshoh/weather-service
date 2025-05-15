@@ -26,9 +26,9 @@ jobs:
         run: docker-compose build
 
       - name: Run tests
-        run: docker-compose run --rm backend pytest
+        run: docker-compose run --rm backend pytest tests/ -v
 
-  publish:
+  publish-and-deploy:
     needs: build-and-test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'  # Выполняется только для ветки main
@@ -53,10 +53,46 @@ jobs:
 
       - name: Build and push backend image
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-backend:latest ./backend
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-backend:latest
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-backend:updated-country ./backend
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-backend:updated-country
 
       - name: Build and push bot image
         run: |
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-bot:latest ./bot
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-bot:latest
+
+      - name: Build and push frontend image
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-frontend:html-js-css ./frontend
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-frontend:html-js-css
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configure Docker for GCP
+        run: gcloud auth configure-docker ${{ secrets.GCP_REGION }}-docker.pkg.dev
+
+      - name: Get GKE credentials
+        run: gcloud container clusters get-credentials ${{ secrets.GCP_CLUSTER_NAME }} --region ${{ secrets.GCP_REGION }} --project ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Create Secrets
+        run: |
+          kubectl apply -f k8s/weather-secrets.yaml
+
+      - name: Deploy to GKE
+        run: |
+          kubectl apply -f k8s/redis-deployment.yaml
+          kubectl apply -f k8s/backend-deployment.yaml
+          kubectl apply -f k8s/bot-deployment.yaml
+          kubectl apply -f k8s/frontend-deployment.yaml
+          kubectl apply -f k8s/prometheus-deployment.yaml
+          kubectl apply -f k8s/grafana-deployment.yaml
+          kubectl rollout status deployment/redis
+          kubectl rollout status deployment/backend
+          kubectl rollout status deployment/bot
+          kubectl rollout status deployment/frontend
+          kubectl rollout status deployment/prometheus
+          kubectl rollout status deployment/grafana
