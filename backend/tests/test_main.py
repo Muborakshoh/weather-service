@@ -1,8 +1,9 @@
+from main import app
 from fastapi.testclient import TestClient
-from main import app  # Убедитесь, что main.py доступен
 
 client = TestClient(app)
 
-def test_read_main():
-    response = client.get("/")
+def test_get_forecast():
+    response = client.get("/forecast/Moscow?lang=ru")
     assert response.status_code == 200
+    assert "city" in response.json()
