@@ -163,6 +163,7 @@
     </div>
 
     <script>
+        // Пустой BACKEND_URL, так как пути будут относительными и обработаны прокси
         const BACKEND_URL = "";
         let forecastDays = 0;
         let chart = null;
@@ -236,7 +237,7 @@
             temperatureChart.style.display = "none";
 
             try {
-                const url = `${BACKEND_URL}/forecast/${cityInput}${forecastDays ? `?days=${forecastDays}&` : "?"}lang=ru`;
+                const url = `/forecast/${cityInput}${forecastDays ? `?days=${forecastDays}&` : "?"}lang=ru`;
                 const response = await fetch(url);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -326,7 +327,7 @@
             historySection.innerHTML = "";
 
             try {
-                const response = await fetch(`${BACKEND_URL}/weather_history?limit=10`);
+                const response = await fetch(`/weather_history?limit=10`);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
