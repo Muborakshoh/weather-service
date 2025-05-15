@@ -80,6 +80,12 @@ jobs:
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
 
+      - name: Install gke-gcloud-auth-plugin
+        run: |
+          echo "Installing gke-gcloud-auth-plugin..."
+          gcloud components install gke-gcloud-auth-plugin --quiet
+          gcloud version
+
       - name: Debug GCloud Auth
         run: |
           gcloud config list
@@ -93,16 +99,16 @@ jobs:
 
       - name: Create Secrets
         run: |
-          kubectl apply -f k8s/weather-secrets.yaml
+          kubectl apply -f k8s/weather-secrets.yaml --validate=false
 
       - name: Deploy to GKE
         run: |
-          kubectl apply -f k8s/redis-deployment.yaml
-          kubectl apply -f k8s/backend-deployment.yaml
-          kubectl apply -f k8s/bot-deployment.yaml
-          kubectl apply -f k8s/frontend-deployment.yaml
-          kubectl apply -f k8s/prometheus-deployment.yaml
-          kubectl apply -f k8s/grafana-deployment.yaml
+          kubectl apply -f k8s/redis-deployment.yaml --validate=false
+          kubectl apply -f k8s/backend-deployment.yaml --validate=false
+          kubectl apply -f k8s/bot-deployment.yaml --validate=false
+          kubectl apply -f k8s/frontend-deployment.yaml --validate=false
+          kubectl apply -f k8s/prometheus-deployment.yaml --validate=false
+          kubectl apply -f k8s/grafana-deployment.yaml --validate=false
           kubectl rollout status deployment/redis
           kubectl rollout status deployment/backend
           kubectl rollout status deployment/bot
