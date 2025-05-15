@@ -15,15 +15,14 @@ services:
     depends_on:
       redis:
         condition: service_started
-    volumes:
-      - ./backend:/app
+    working_dir: /app  # Устанавливаем рабочую директорию
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "8081:80"  # Изменён порт с 8080 на 8081
+      - "8081:80"  # Изменён порт на 8082 для избежания конфликтов
     depends_on:
       backend:
         condition: service_started
@@ -42,8 +41,7 @@ services:
     depends_on:
       backend:
         condition: service_started
-    volumes:
-      - ./bot:/app
+    working_dir: /app  # Устанавливаем рабочую директорию
     ports:
       - "8001:8001"
 

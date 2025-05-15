@@ -26,7 +26,7 @@ jobs:
         run: docker-compose build
 
       - name: Run tests
-        run: docker-compose run --rm backend pytest tests/ -v
+        run: docker-compose run --rm -w /app backend pytest tests/ -v
 
   publish-and-deploy:
     needs: build-and-test
@@ -53,8 +53,8 @@ jobs:
 
       - name: Build and push backend image
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-backend:updated-country ./backend
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-backend:updated-country
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-backend:latest ./backend
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-backend:latest
 
       - name: Build and push bot image
         run: |
@@ -63,8 +63,8 @@ jobs:
 
       - name: Build and push frontend image
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-frontend:html-js-css ./frontend
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-frontend:html-js-css
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-frontend:latest ./frontend
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-frontend:latest
 
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
