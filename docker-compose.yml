@@ -9,20 +9,19 @@ services:
       - "8000:8000"
     environment:
       - OPENWEATHERMAP_API_KEY=${OPENWEATHERMAP_API_KEY}
-      - WEATHERAPI_API_KEY=${WEATHERAPI_API_KEY}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     depends_on:
       redis:
         condition: service_started
-    working_dir: /app  # Устанавливаем рабочую директорию
+    working_dir: /app
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "8081:80"  # Изменён порт на 8082 для избежания конфликтов
+      - "8082:80"
     depends_on:
       backend:
         condition: service_started
@@ -41,7 +40,7 @@ services:
     depends_on:
       backend:
         condition: service_started
-    working_dir: /app  # Устанавливаем рабочую директорию
+    working_dir: /app
     ports:
       - "8001:8001"
 
