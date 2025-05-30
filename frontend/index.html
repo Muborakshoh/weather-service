@@ -163,12 +163,11 @@
     </div>
 
     <script>
-        // Пустой BACKEND_URL, так как пути будут относительными и обработаны прокси
         const BACKEND_URL = "";
         let forecastDays = 0;
         let chart = null;
 
-        // Обновлённый маппинг погодных условий на эмодзи
+        
         const WEATHER_EMOJIS = {
             "clear": "☀️",
             "clouds": "☁️",
@@ -186,14 +185,14 @@
             "overcast clouds": "☁️"
         };
 
-        // Функция для получения эмодзи на основе описания
+       
         function getWeatherEmoji(description) {
             const desc = description.toLowerCase();
-            // Проверяем точное совпадение
+            
             if (WEATHER_EMOJIS[desc]) {
                 return WEATHER_EMOJIS[desc];
             }
-            // Проверяем частичное совпадение
+            
             if (desc.includes("rain")) return "🌧️";
             if (desc.includes("cloud")) return "☁️";
             if (desc.includes("clear")) return "☀️";
@@ -201,11 +200,9 @@
             if (desc.includes("thunder")) return "⛈️";
             if (desc.includes("mist") || desc.includes("fog")) return "🌫️";
             if (desc.includes("drizzle")) return "🌦️";
-            // Дефолтный эмодзи — облако
             return "🌦️";
         }
 
-        // Функция для получения эмодзи флага по коду страны
         function getFlagEmoji(countryCode) {
             if (!countryCode) return "";
             try {
@@ -217,12 +214,11 @@
             }
         }
 
-        // Показ/скрытие загрузки
+        
         function toggleLoading(show) {
             document.getElementById("loading").style.display = show ? "block" : "none";
         }
 
-        // Поиск погоды
         async function searchWeather() {
             const cityInput = document.getElementById("cityInput").value.trim();
             if (!cityInput) {
@@ -268,7 +264,6 @@
 
                 weatherResult.innerHTML = html;
 
-                // Построение графика температуры
                 if (chart) chart.destroy();
                 temperatureChart.style.display = "block";
                 const ctx = temperatureChart.getContext("2d");
@@ -298,7 +293,6 @@
                     }
                 });
 
-                // Сохраняем в локальное хранилище
                 const history = JSON.parse(localStorage.getItem("weatherHistory")) || [];
                 history.unshift({
                     city: data.city,
@@ -314,13 +308,11 @@
             }
         }
 
-        // Установка количества дней для прогноза
         function setForecastDays(days) {
             forecastDays = days;
             searchWeather();
         }
 
-        // Показ истории поиска
         async function showHistory() {
             toggleLoading(true);
             const historySection = document.getElementById("historySection");
@@ -349,7 +341,6 @@
                     `;
                 });
 
-                // Добавляем локальную историю
                 const localHistory = JSON.parse(localStorage.getItem("weatherHistory")) || [];
                 if (localHistory.length > 0) {
                     html += "<h3>Локальная история</h3>";
@@ -377,7 +368,6 @@
             }
         }
 
-        // Обработчик Enter для поиска
         document.getElementById("cityInput").addEventListener("keypress", (e) => {
             if (e.key === "Enter") {
                 searchWeather();
