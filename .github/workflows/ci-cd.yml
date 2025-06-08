@@ -22,16 +22,15 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli@latest
 
-      # 4. Аутентификация с Railway
-      - name: Authenticate with Railway
+      # 4. Аутентификация с Railway через переменную окружения
+      - name: Set Railway Token
         run: |
           echo "RAILWAY_TOKEN=${{ secrets.RAILWAY_TOKEN }}" >> $GITHUB_ENV
-          railway login --api-key ${{ secrets.RAILWAY_TOKEN }} || railway login --token ${{ secrets.RAILWAY_TOKEN }}
-          railway whoami  # Проверка аутентификации
+          railway whoami  # Проверка аутентификации (опционально)
 
       # 5. Связывание проекта
       - name: Link Railway project
-        run: railway link --project <your-railway-project-id>
+        run: railway link --project 6a3eb5a2-fabc-411d-9006-48b2fdfd08e5
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
