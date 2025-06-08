@@ -26,18 +26,24 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Login to Yandex Cloud Container Registry
+      - name: Install and Configure Yandex Cloud CLI
         run: |
           # Установка Yandex Cloud CLI
           curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -a
-          # Применение изменений PATH
-          export PATH=$PATH:$HOME/.local/bin
-          # Проверка установки
-          yc --version || { echo "Yandex Cloud CLI installation failed"; exit 1; }
+          # Установка явного пути к yc
+          YC_BINARY="/home/runner/.local/bin/yc"
+          if [ -f "$YC_BINARY" ]; then
+            export PATH=$PATH:/home/runner/.local/bin
+            chmod +x "$YC_BINARY"
+            "$YC_BINARY" --version || { echo "Yandex Cloud CLI version check failed"; exit 1; }
+          else
+            echo "Yandex Cloud CLI binary not found at $YC_BINARY"
+            exit 1
+          fi
 
           # Аутентификация
           echo '${{ secrets.YC_SERVICE_ACCOUNT_KEY }}' > yc-key.json
-          yc config set service-account-key yc-key.json
+          "$YC_BINARY" config set service-account-key yc-key.json
 
       - name: Build and push Docker images
         run: |
@@ -89,17 +95,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Install Yandex Cloud CLI
+      - name: Install and Configure Yandex Cloud CLI
         run: |
+          # Установка Yandex Cloud CLI
           curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -a
-          export PATH=$PATH:$HOME/.local/bin
-          # Проверка установки
-          yc --version || { echo "Yandex Cloud CLI installation failed"; exit 1; }
+          # Установка явного пути к yc
+          YC_BINARY="/home/runner/.local/bin/yc"
+          if [ -f "$YC_BINARY" ]; then
+            export PATH=$PATH:/home/runner/.local/bin
+            chmod +x "$YC_BINARY"
+            "$YC_BINARY" --version || { echo "Yandex Cloud CLI version check failed"; exit 1; }
+          else
+            echo "Yandex Cloud CLI binary not found at $YC_BINARY"
+            exit 1
+          fi
 
-      - name: Authenticate to Yandex Cloud
-        run: |
+          # Аутентификация
           echo '${{ secrets.YC_SERVICE_ACCOUNT_KEY }}' > yc-key.json
-          yc config set service-account-key yc-key.json
+          "$YC_BINARY" config set service-account-key yc-key.json
 
       - name: Set up kubectl
         uses: azure/setup-kubectl@v3
