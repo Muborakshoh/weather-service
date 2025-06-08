@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: CI/CD Pipeline for Kubernetes on Yandex Cloud
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 
 env:
   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-  YC_REGISTRY_ID: ${{ secrets.YC_REGISTRY_ID}}
+  YC_REGISTRY_ID: ${{ secrets.YC_REGISTRY_ID }}
 
 jobs:
   build-and-push:
@@ -29,46 +29,49 @@ jobs:
       - name: Login to Yandex Cloud Container Registry
         run: |
           echo '${{ secrets.YC_SERVICE_ACCOUNT_KEY }}' > yc-key.json
-          yc --no-user-output container registry configure-docker --service-account-key-file yc-key.json
+          yc --no-user-output container registry configure-docker --iam-key-file yc-key.json
 
       - name: Build and push Docker images
         run: |
-          docker-compose build
-          docker tag weather_service-backend:latest $DOCKERHUB_USERNAME/weather-backend:${{ github.sha }}
-          docker tag weather_service-frontend:latest $DOCKERHUB_USERNAME/weather-frontend:${{ github.sha }}
-          docker tag weather_service-bot:latest $DOCKERHUB_USERNAME/weather-bot:${{ github.sha }}
-          docker tag redis:7 $DOCKERHUB_USERNAME/redis:${{ github.sha }}
-          docker tag prom/prometheus:latest $DOCKERHUB_USERNAME/prometheus:${{ github.sha }}
-          docker tag grafana/grafana:latest $DOCKERHUB_USERNAME/grafana:${{ github.sha }}
-          docker tag oliver006/redis_exporter:latest $DOCKERHUB_USERNAME/redis-exporter:${{ github.sha }}
-          docker tag gcr.io/cadvisor/cadvisor:latest $DOCKERHUB_USERNAME/cadvisor:${{ github.sha }}
+          # Сборка и тегирование образов
+          docker build -t $DOCKERHUB_USERNAME/weather-service-backend:updated-country ./backend
+          docker build -t $DOCKERHUB_USERNAME/weather-service-frontend:html-js-css ./frontend
+          docker build -t $DOCKERHUB_USERNAME/weather-service-bot:latest ./bot
+          docker tag redis:7 $DOCKERHUB_USERNAME/redis:7
+          docker tag prom/prometheus:latest $DOCKERHUB_USERNAME/prometheus:latest
+          docker tag grafana/grafana:latest $DOCKERHUB_USERNAME/grafana:latest
+          docker tag oliver006/redis_exporter:latest $DOCKERHUB_USERNAME/redis-exporter:latest
+          docker tag gcr.io/cadvisor/cadvisor:latest $DOCKERHUB_USERNAME/cadvisor:latest
 
-          docker push $DOCKERHUB_USERNAME/weather-backend:${{ github.sha }}
-          docker push $DOCKERHUB_USERNAME/weather-frontend:${{ github.sha }}
-          docker push $DOCKERHUB_USERNAME/weather-bot:${{ github.sha }}
-          docker push $DOCKERHUB_USERNAME/redis:${{ github.sha }}
-          docker push $DOCKERHUB_USERNAME/prometheus:${{ github.sha }}
-          docker push $DOCKERHUB_USERNAME/grafana:${{ github.sha }}
-          docker push $DOCKERHUB_USERNAME/redis-exporter:${{ github.sha }}
-          docker push $DOCKERHUB_USERNAME/cadvisor:${{ github.sha }}
+          # Пуш в Docker Hub
+          docker push $DOCKERHUB_USERNAME/weather-service-backend:updated-country
+          docker push $DOCKERHUB_USERNAME/weather-service-frontend:html-js-css
+          docker push $DOCKERHUB_USERNAME/weather-service-bot:latest
+          docker push $DOCKERHUB_USERNAME/redis:7
+          docker push $DOCKERHUB_USERNAME/prometheus:latest
+          docker push $DOCKERHUB_USERNAME/grafana:latest
+          docker push $DOCKERHUB_USERNAME/redis-exporter:latest
+          docker push $DOCKERHUB_USERNAME/cadvisor:latest
 
-          docker tag weather_service-backend:latest cr.yandex/$YC_REGISTRY_ID/weather-backend:${{ github.sha }}
-          docker tag weather_service-frontend:latest cr.yandex/$YC_REGISTRY_ID/weather-frontend:${{ github.sha }}
-          docker tag weather_service-bot:latest cr.yandex/$YC_REGISTRY_ID/weather-bot:${{ github.sha }}
-          docker tag redis:7 cr.yandex/$YC_REGISTRY_ID/redis:${{ github.sha }}
-          docker tag prom/prometheus:latest cr.yandex/$YC_REGISTRY_ID/prometheus:${{ github.sha }}
-          docker tag grafana/grafana:latest cr.yandex/$YC_REGISTRY_ID/grafana:${{ github.sha }}
-          docker tag oliver006/redis_exporter:latest cr.yandex/$YC_REGISTRY_ID/redis-exporter:${{ github.sha }}
-          docker tag gcr.io/cadvisor/cadvisor:latest cr.yandex/$YC_REGISTRY_ID/cadvisor:${{ github.sha }}
+          # Тегирование для Yandex Container Registry
+          docker tag $DOCKERHUB_USERNAME/weather-service-backend:updated-country cr.yandex/$YC_REGISTRY_ID/weather-service-backend:updated-country
+          docker tag $DOCKERHUB_USERNAME/weather-service-frontend:html-js-css cr.yandex/$YC_REGISTRY_ID/weather-service-frontend:html-js-css
+          docker tag $DOCKERHUB_USERNAME/weather-service-bot:latest cr.yandex/$YC_REGISTRY_ID/weather-service-bot:latest
+          docker tag $DOCKERHUB_USERNAME/redis:7 cr.yandex/$YC_REGISTRY_ID/redis:7
+          docker tag $DOCKERHUB_USERNAME/prometheus:latest cr.yandex/$YC_REGISTRY_ID/prometheus:latest
+          docker tag $DOCKERHUB_USERNAME/grafana:latest cr.yandex/$YC_REGISTRY_ID/grafana:latest
+          docker tag $DOCKERHUB_USERNAME/redis-exporter:latest cr.yandex/$YC_REGISTRY_ID/redis-exporter:latest
+          docker tag $DOCKERHUB_USERNAME/cadvisor:latest cr.yandex/$YC_REGISTRY_ID/cadvisor:latest
 
-          docker push cr.yandex/$YC_REGISTRY_ID/weather-backend:${{ github.sha }}
-          docker push cr.yandex/$YC_REGISTRY_ID/weather-frontend:${{ github.sha }}
-          docker push cr.yandex/$YC_REGISTRY_ID/weather-bot:${{ github.sha }}
-          docker push cr.yandex/$YC_REGISTRY_ID/redis:${{ github.sha }}
-          docker push cr.yandex/$YC_REGISTRY_ID/prometheus:${{ github.sha }}
-          docker push cr.yandex/$YC_REGISTRY_ID/grafana:${{ github.sha }}
-          docker push cr.yandex/$YC_REGISTRY_ID/redis-exporter:${{ github.sha }}
-          docker push cr.yandex/$YC_REGISTRY_ID/cadvisor:${{ github.sha }}
+          # Пуш в Yandex Container Registry
+          docker push cr.yandex/$YC_REGISTRY_ID/weather-service-backend:updated-country
+          docker push cr.yandex/$YC_REGISTRY_ID/weather-service-frontend:html-js-css
+          docker push cr.yandex/$YC_REGISTRY_ID/weather-service-bot:latest
+          docker push cr.yandex/$YC_REGISTRY_ID/redis:7
+          docker push cr.yandex/$YC_REGISTRY_ID/prometheus:latest
+          docker push cr.yandex/$YC_REGISTRY_ID/grafana:latest
+          docker push cr.yandex/$YC_REGISTRY_ID/redis-exporter:latest
+          docker push cr.yandex/$YC_REGISTRY_ID/cadvisor:latest
 
   deploy:
     needs: build-and-push
@@ -88,81 +91,40 @@ jobs:
           echo '${{ secrets.YC_SERVICE_ACCOUNT_KEY }}' > yc-key.json
           yc config set service-account-key yc-key.json
 
-      - name: Deploy to Yandex Cloud
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubeconfig
         run: |
-          # Создание или обновление контейнеров
-          yc serverless container create --name weather-backend || true
-          yc serverless container create --name weather-frontend || true
-          yc serverless container create --name weather-bot || true
-          yc serverless container create --name redis || true
-          yc serverless container create --name prometheus || true
-          yc serverless container create --name grafana || true
-          yc serverless container create --name redis-exporter || true
-          yc serverless container create --name cadvisor || true
+          echo '${{ secrets.KUBE_CONFIG }}' | base64 -d > kubeconfig.yaml
+          export KUBECONFIG=$PWD/kubeconfig.yaml
 
-          # Получение ID контейнеров
-          BACKEND_ID=$(yc serverless container get --name weather-backend --format json | jq -r '.id')
-          FRONTEND_ID=$(yc serverless container get --name weather-frontend --format json | jq -r '.id')
-          BOT_ID=$(yc serverless container get --name weather-bot --format json | jq -r '.id')
-          REDIS_ID=$(yc serverless container get --name redis --format json | jq -r '.id')
-          PROMETHEUS_ID=$(yc serverless container get --name prometheus --format json | jq -r '.id')
-          GRAFANA_ID=$(yc serverless container get --name grafana --format json | jq -r '.id')
-          REDIS_EXPORTER_ID=$(yc serverless container get --name redis-exporter --format json | jq -r '.id')
-          CADVISOR_ID=$(yc serverless container get --name cadvisor --format json | jq -r '.id')
+      - name: Deploy to Kubernetes
+        run: |
+          # Применение всех манифестов
+          kubectl apply -f k8s/redis-deployment.yaml
+          kubectl apply -f k8s/bot-deployment.yaml
+          kubectl apply -f k8s/frontend-deployment.yaml
+          kubectl apply -f k8s/redis-exporter-deployment.yaml
+          kubectl apply -f k8s/grafana-deployment.yaml
+          kubectl apply -f k8s/backend-deployment.yaml
+          kubectl apply -f k8s/prometheus-deployment.yaml
 
-          # Деплой ревизий
-          yc serverless container revision deploy \
-            --container-id $BACKEND_ID \
-            --image cr.yandex/$YC_REGISTRY_ID/weather-backend:${{ github.sha }} \
-            --service-account-id $(yc iam service-account get --name weather-service-account --format json | jq -r '.id') \
-            --environment OPENWEATHERMAP_API_KEY=${{ secrets.OPENWEATHERMAP_API_KEY }},REDIS_HOST=redis,REDIS_PORT=6379 \
-            --concurrency 10
+          # Проверка статуса подов
+          kubectl rollout status deployment/redis -n default
+          kubectl rollout status deployment/bot -n default
+          kubectl rollout status deployment/frontend -n default
+          kubectl rollout status deployment/redis-exporter -n default
+          kubectl rollout status deployment/grafana -n default
+          kubectl rollout status deployment/backend -n default
+          kubectl rollout status deployment/prometheus -n default
 
-          yc serverless container revision deploy \
-            --container-id $FRONTEND_ID \
-            --image cr.yandex/$YC_REGISTRY_ID/weather-frontend:${{ github.sha }} \
-            --service-account-id $(yc iam service-account get --name weather-service-account --format json | jq -r '.id') \
-            --concurrency 10
-
-          yc serverless container revision deploy \
-            --container-id $BOT_ID \
-            --image cr.yandex/$YC_REGISTRY_ID/weather-bot:${{ github.sha }} \
-            --service-account-id $(yc iam service-account get --name weather-service-account --format json | jq -r '.id') \
-            --environment TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }},BACKEND_URL=http://backend:8000,REDIS_HOST=redis,REDIS_PORT=6379 \
-            --concurrency 10
-
-          yc serverless container revision deploy \
-            --container-id $REDIS_ID \
-            --image cr.yandex/$YC_REGISTRY_ID/redis:${{ github.sha }} \
-            --service-account-id $(yc iam service-account get --name weather-service-account --format json | jq -r '.id') \
-            --environment REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD:-redis }} \
-            --concurrency 10
-
-          yc serverless container revision deploy \
-            --container-id $PROMETHEUS_ID \
-            --image cr.yandex/$YC_REGISTRY_ID/prometheus:${{ github.sha }} \
-            --service-account-id $(yc iam service-account get --name weather-service-account --format json | jq -r '.id') \
-            --concurrency 10
-
-          yc serverless container revision deploy \
-            --container-id $GRAFANA_ID \
-            --image cr.yandex/$YC_REGISTRY_ID/grafana:${{ github.sha }} \
-            --service-account-id $(yc iam service-account get --name weather-service-account --format json | jq -r '.id') \
-            --concurrency 10
-
-          yc serverless container revision deploy \
-            --container-id $REDIS_EXPORTER_ID \
-            --image cr.yandex/$YC_REGISTRY_ID/redis-exporter:${{ github.sha }} \
-            --service-account-id $(yc iam service-account get --name weather-service-account --format json | jq -r '.id') \
-            --environment REDIS_ADDR=redis:6379,REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD:-redis }} \
-            --concurrency 10
-
-          yc serverless container revision deploy \
-            --container-id $CADVISOR_ID \
-            --image cr.yandex/$YC_REGISTRY_ID/cadvisor:${{ github.sha }} \
-            --service-account-id $(yc iam service-account get --name weather-service-account --format json | jq -r '.id') \
-            --concurrency 10
-
-          # Разрешение публичного доступа (опционально)
-          yc serverless container allow-unauthenticated-invoke --name weather-frontend
-          yc serverless container allow-unauthenticated-invoke --name weather-backend
+      - name: Verify Deployment
+        run: |
+          sleep 30  # Ждём инициализацию
+          FRONTEND_IP=$(kubectl get service frontend -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          if [ -n "$FRONTEND_IP" ]; then
+            curl -f http://$FRONTEND_IP || echo "Deployment verification failed, check Kubernetes logs"
+          else
+            echo "Frontend IP not found, deployment might have failed"
+          fi
