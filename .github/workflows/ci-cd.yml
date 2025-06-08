@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: Deploy to Railway
 
 on:
   push:
@@ -7,111 +7,68 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-test:
+  deploy:
     runs-on: ubuntu-latest
     steps:
+      # 1. Чекаут кода
       - name: Checkout code
         uses: actions/checkout@v3
 
+      # 2. Настройка Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      - name: Install Docker Compose
+      # 3. Логин в Railway
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Authenticate with Railway
+        run: railway login --token ${{ secrets.RAILWAY_TOKEN }}
+
+      # 4. Установка переменных окружения
+      - name: Set environment variables
         run: |
-          sudo curl -L "https://github.com/docker/compose/releases/download/v2.17.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-          sudo chmod +x /usr/local/bin/docker-compose
-          docker-compose --version
+          echo "OPENWEATHERMAP_API_KEY=${{ secrets.OPENWEATHERMAP_API_KEY }}" >> .env
+          echo "TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }}" >> .env
 
-      - name: Build Docker images
-        run: docker-compose build
+      # 5. Деплой всех сервисов
+      - name: Deploy Backend
+        run: railway up --service backend --dockerfile ./backend/Dockerfile --env .env
 
-      - name: Run tests
-        env:
-          OPENWEATHERMAP_API_KEY: ${{ secrets.OPENWEATHERMAP_API_KEY }}
+      - name: Deploy Frontend
+        run: railway up --service frontend --dockerfile ./frontend/Dockerfile --env .env
+
+      - name: Deploy Bot
+        run: railway up --service bot --dockerfile ./bot/Dockerfile --env .env
+
+      - name: Deploy Redis
+        run: railway up --service redis --image redis:7
+
+      - name: Deploy Prometheus
+        run: railway up --service prometheus --image prom/prometheus:latest --env .env
+
+      - name: Deploy Grafana
+        run: railway up --service grafana --image grafana/grafana:latest --env .env
+
+      - name: Deploy Redis Exporter
+        run: railway up --service redis-exporter --image oliver006/redis_exporter:latest --env .env
+
+      - name: Deploy cAdvisor
+        run: railway up --service cadvisor --image gcr.io/cadvisor/cadvisor:latest --env .env
+
+      # 6. Настройка переменных и зависимостей
+      - name: Configure service variables
         run: |
-          docker-compose run --rm -w /app -e OPENWEATHERMAP_API_KEY=$OPENWEATHERMAP_API_KEY backend sh -c "pip show fastapi starlette && pytest tests/ -v"
+          railway service variable set REDIS_HOST=redis --service backend
+          railway service variable set REDIS_PORT=6379 --service backend
+          railway service variable set BACKEND_URL=http://backend:8000 --service bot
+          railway service variable set REDIS_HOST=redis --service bot
+          railway service variable set REDIS_PORT=6379 --service bot
+          railway service variable set REDIS_ADDR=redis:6379 --service redis-exporter
 
-  publish-and-deploy:
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'  # Выполняется только для ветки main
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Install Docker Compose
+      # 7. Настройка конфигурации Prometheus (если нужно)
+      - name: Configure Prometheus
         run: |
-          sudo curl -L "https://github.com/docker/compose/releases/download/v2.17.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-          sudo chmod +x /usr/local/bin/docker-compose
-          docker-compose --version
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build and push backend image
-        run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-backend:latest ./backend
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-backend:latest
-
-      - name: Build and push bot image
-        run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-bot:latest ./bot
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-bot:latest
-
-      - name: Build and push frontend image
-        run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-frontend:latest ./frontend
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/weather-service-frontend:latest
-
-      - name: Authenticate to Google Cloud
-        id: auth
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: Set up Google Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-
-      - name: Install gke-gcloud-auth-plugin
-        run: |
-          echo "Installing gke-gcloud-auth-plugin..."
-          gcloud components install gke-gcloud-auth-plugin --quiet
-          gcloud version
-
-      - name: Debug GCloud Auth
-        run: |
-          gcloud config list
-          gcloud auth list
-
-      - name: Configure Docker for GCP
-        run: gcloud auth configure-docker ${{ secrets.GCP_REGION }}-docker.pkg.dev --quiet
-
-      - name: Get GKE credentials
-        run: gcloud container clusters get-credentials ${{ secrets.GCP_CLUSTER_NAME }} --region ${{ secrets.GCP_REGION }} --project ${{ secrets.GCP_PROJECT_ID }}
-
-      - name: Create Secrets
-        run: |
-          kubectl apply -f k8s/weather-secrets.yaml --validate=false
-
-      - name: Deploy to GKE
-        run: |
-          kubectl apply -f k8s/redis-deployment.yaml --validate=false
-          kubectl apply -f k8s/backend-deployment.yaml --validate=false
-          kubectl apply -f k8s/bot-deployment.yaml --validate=false
-          kubectl apply -f k8s/frontend-deployment.yaml --validate=false
-          kubectl apply -f k8s/prometheus-deployment.yaml --validate=false
-          kubectl apply -f k8s/grafana-deployment.yaml --validate=false
-          kubectl rollout status deployment/redis
-          kubectl rollout status deployment/backend
-          kubectl rollout status deployment/bot
-          kubectl rollout status deployment/frontend
-          kubectl rollout status deployment/prometheus
-          kubectl rollout status deployment/grafana
+          railway service volume create --name prometheus-data --service prometheus
+          railway service variable set PROMETHEUS_CONFIG_FILE=/etc/prometheus/prometheus.yml --service prometheus
+          railway service volume mount --volume prometheus-data --path /prometheus --service prometheus
