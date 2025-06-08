@@ -5,6 +5,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    image: weather_service-backend
     ports:
       - "8000:8000"
     environment:
@@ -13,20 +14,25 @@ services:
       - REDIS_PORT=6379
     depends_on:
       redis:
-        condition: service_started
-    working_dir: /app
+        condition: service_healthy
     networks:
       - weather-service-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    image: weather_service-frontend
     ports:
       - "8082:80"
     depends_on:
       backend:
-        condition: service_started
+        condition: service_healthy
     networks:
       - weather-service-network
 
@@ -34,6 +40,7 @@ services:
     build:
       context: ./bot
       dockerfile: Dockerfile
+    image: weather_service-bot
     environment:
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
       - BACKEND_URL=http://backend:8000
@@ -41,21 +48,24 @@ services:
       - REDIS_PORT=6379
     depends_on:
       backend:
-        condition: service_started
-    working_dir: /app
-    ports:
-      - "8001:8001"
+        condition: service_healthy
     networks:
       - weather-service-network
 
   redis:
     image: redis:7
+    command: redis-server --requirepass ${REDIS_PASSWORD:-redis}
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     networks:
       - weather-service-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   prometheus:
     image: prom/prometheus:latest
@@ -78,7 +88,7 @@ services:
   grafana:
     image: grafana/grafana:latest
     ports:
-      - "3001:3000"
+      - "3000:3000"
     volumes:
       - grafana_data:/var/lib/grafana
     depends_on:
@@ -90,8 +100,10 @@ services:
     image: oliver006/redis_exporter:latest
     environment:
       - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis}
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     ports:
       - "9121:9121"
     networks:

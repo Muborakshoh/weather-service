@@ -1,4 +1,4 @@
-name: Deploy to Railway
+name: CI/CD Pipeline
 
 on:
   push:
@@ -6,78 +6,163 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  YC_REGISTRY_ID: ${{ secrets.YC_REGISTRY_ID}}
+
 jobs:
-  deploy:
+  build-and-push:
     runs-on: ubuntu-latest
     steps:
-      # 1. Чекаут кода
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 2. Настройка Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      # 3. Установка Railway CLI
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli@latest
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 4. Аутентификация с Railway через переменную окружения
-      - name: Set Railway Token
+      - name: Login to Yandex Cloud Container Registry
         run: |
-          echo "RAILWAY_TOKEN=${{ secrets.RAILWAY_TOKEN }}" >> $GITHUB_ENV
-          railway whoami  # Проверка аутентификации (опционально)
+          echo '${{ secrets.YC_SERVICE_ACCOUNT_KEY }}' > yc-key.json
+          yc --no-user-output container registry configure-docker --service-account-key-file yc-key.json
 
-      # 5. Связывание проекта
-      - name: Link Railway project
-        run: railway link --project 6a3eb5a2-fabc-411d-9006-48b2fdfd08e5
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-
-      # 6. Установка переменных окружения
-      - name: Set environment variables
+      - name: Build and push Docker images
         run: |
-          echo "OPENWEATHERMAP_API_KEY=${{ secrets.OPENWEATHERMAP_API_KEY }}" >> .env
-          echo "TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }}" >> .env
+          docker-compose build
+          docker tag weather_service-backend:latest $DOCKERHUB_USERNAME/weather-backend:${{ github.sha }}
+          docker tag weather_service-frontend:latest $DOCKERHUB_USERNAME/weather-frontend:${{ github.sha }}
+          docker tag weather_service-bot:latest $DOCKERHUB_USERNAME/weather-bot:${{ github.sha }}
+          docker tag redis:7 $DOCKERHUB_USERNAME/redis:${{ github.sha }}
+          docker tag prom/prometheus:latest $DOCKERHUB_USERNAME/prometheus:${{ github.sha }}
+          docker tag grafana/grafana:latest $DOCKERHUB_USERNAME/grafana:${{ github.sha }}
+          docker tag oliver006/redis_exporter:latest $DOCKERHUB_USERNAME/redis-exporter:${{ github.sha }}
+          docker tag gcr.io/cadvisor/cadvisor:latest $DOCKERHUB_USERNAME/cadvisor:${{ github.sha }}
 
-      # 7. Деплой всех сервисов
-      - name: Deploy Backend
-        run: railway up --service backend --dockerfile ./backend/Dockerfile --env .env
+          docker push $DOCKERHUB_USERNAME/weather-backend:${{ github.sha }}
+          docker push $DOCKERHUB_USERNAME/weather-frontend:${{ github.sha }}
+          docker push $DOCKERHUB_USERNAME/weather-bot:${{ github.sha }}
+          docker push $DOCKERHUB_USERNAME/redis:${{ github.sha }}
+          docker push $DOCKERHUB_USERNAME/prometheus:${{ github.sha }}
+          docker push $DOCKERHUB_USERNAME/grafana:${{ github.sha }}
+          docker push $DOCKERHUB_USERNAME/redis-exporter:${{ github.sha }}
+          docker push $DOCKERHUB_USERNAME/cadvisor:${{ github.sha }}
 
-      - name: Deploy Frontend
-        run: railway up --service frontend --dockerfile ./frontend/Dockerfile --env .env
+          docker tag weather_service-backend:latest cr.yandex/$YC_REGISTRY_ID/weather-backend:${{ github.sha }}
+          docker tag weather_service-frontend:latest cr.yandex/$YC_REGISTRY_ID/weather-frontend:${{ github.sha }}
+          docker tag weather_service-bot:latest cr.yandex/$YC_REGISTRY_ID/weather-bot:${{ github.sha }}
+          docker tag redis:7 cr.yandex/$YC_REGISTRY_ID/redis:${{ github.sha }}
+          docker tag prom/prometheus:latest cr.yandex/$YC_REGISTRY_ID/prometheus:${{ github.sha }}
+          docker tag grafana/grafana:latest cr.yandex/$YC_REGISTRY_ID/grafana:${{ github.sha }}
+          docker tag oliver006/redis_exporter:latest cr.yandex/$YC_REGISTRY_ID/redis-exporter:${{ github.sha }}
+          docker tag gcr.io/cadvisor/cadvisor:latest cr.yandex/$YC_REGISTRY_ID/cadvisor:${{ github.sha }}
 
-      - name: Deploy Bot
-        run: railway up --service bot --dockerfile ./bot/Dockerfile --env .env
+          docker push cr.yandex/$YC_REGISTRY_ID/weather-backend:${{ github.sha }}
+          docker push cr.yandex/$YC_REGISTRY_ID/weather-frontend:${{ github.sha }}
+          docker push cr.yandex/$YC_REGISTRY_ID/weather-bot:${{ github.sha }}
+          docker push cr.yandex/$YC_REGISTRY_ID/redis:${{ github.sha }}
+          docker push cr.yandex/$YC_REGISTRY_ID/prometheus:${{ github.sha }}
+          docker push cr.yandex/$YC_REGISTRY_ID/grafana:${{ github.sha }}
+          docker push cr.yandex/$YC_REGISTRY_ID/redis-exporter:${{ github.sha }}
+          docker push cr.yandex/$YC_REGISTRY_ID/cadvisor:${{ github.sha }}
 
-      - name: Deploy Redis
-        run: railway up --service redis --image redis:7
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: Deploy Prometheus
-        run: railway up --service prometheus --image prom/prometheus:latest --env .env
-
-      - name: Deploy Grafana
-        run: railway up --service grafana --image grafana/grafana:latest --env .env
-
-      - name: Deploy Redis Exporter
-        run: railway up --service redis-exporter --image oliver006/redis_exporter:latest --env .env
-
-      - name: Deploy cAdvisor
-        run: railway up --service cadvisor --image gcr.io/cadvisor/cadvisor:latest --env .env
-
-      # 8. Настройка переменных и зависимостей
-      - name: Configure service variables
+      - name: Install Yandex Cloud CLI
         run: |
-          railway service variable set REDIS_HOST=redis --service backend
-          railway service variable set REDIS_PORT=6379 --service backend
-          railway service variable set BACKEND_URL=http://backend:8000 --service bot
-          railway service variable set REDIS_HOST=redis --service bot
-          railway service variable set REDIS_PORT=6379 --service bot
-          railway service variable set REDIS_ADDR=redis:6379 --service redis-exporter
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -a
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      # 9. Настройка конфигурации Prometheus
-      - name: Configure Prometheus
+      - name: Authenticate to Yandex Cloud
         run: |
-          railway service volume create --name prometheus-data --service prometheus
-          railway service variable set PROMETHEUS_CONFIG_FILE=/etc/prometheus/prometheus.yml --service prometheus
-          railway service volume mount --volume prometheus-data --path /prometheus --service prometheus
+          echo '${{ secrets.YC_SERVICE_ACCOUNT_KEY }}' > yc-key.json
+          yc config set service-account-key yc-key.json
+
+      - name: Deploy to Yandex Cloud
+        run: |
+          # Создание или обновление контейнеров
+          yc serverless container create --name weather-backend || true
+          yc serverless container create --name weather-frontend || true
+          yc serverless container create --name weather-bot || true
+          yc serverless container create --name redis || true
+          yc serverless container create --name prometheus || true
+          yc serverless container create --name grafana || true
+          yc serverless container create --name redis-exporter || true
+          yc serverless container create --name cadvisor || true
+
+          # Получение ID контейнеров
+          BACKEND_ID=$(yc serverless container get --name weather-backend --format json | jq -r '.id')
+          FRONTEND_ID=$(yc serverless container get --name weather-frontend --format json | jq -r '.id')
+          BOT_ID=$(yc serverless container get --name weather-bot --format json | jq -r '.id')
+          REDIS_ID=$(yc serverless container get --name redis --format json | jq -r '.id')
+          PROMETHEUS_ID=$(yc serverless container get --name prometheus --format json | jq -r '.id')
+          GRAFANA_ID=$(yc serverless container get --name grafana --format json | jq -r '.id')
+          REDIS_EXPORTER_ID=$(yc serverless container get --name redis-exporter --format json | jq -r '.id')
+          CADVISOR_ID=$(yc serverless container get --name cadvisor --format json | jq -r '.id')
+
+          # Деплой ревизий
+          yc serverless container revision deploy \
+            --container-id $BACKEND_ID \
+            --image cr.yandex/$YC_REGISTRY_ID/weather-backend:${{ github.sha }} \
+            --service-account-id $(yc iam service-account get --name weather-service-account --format json | jq -r '.id') \
+            --environment OPENWEATHERMAP_API_KEY=${{ secrets.OPENWEATHERMAP_API_KEY }},REDIS_HOST=redis,REDIS_PORT=6379 \
+            --concurrency 10
+
+          yc serverless container revision deploy \
+            --container-id $FRONTEND_ID \
+            --image cr.yandex/$YC_REGISTRY_ID/weather-frontend:${{ github.sha }} \
+            --service-account-id $(yc iam service-account get --name weather-service-account --format json | jq -r '.id') \
+            --concurrency 10
+
+          yc serverless container revision deploy \
+            --container-id $BOT_ID \
+            --image cr.yandex/$YC_REGISTRY_ID/weather-bot:${{ github.sha }} \
+            --service-account-id $(yc iam service-account get --name weather-service-account --format json | jq -r '.id') \
+            --environment TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }},BACKEND_URL=http://backend:8000,REDIS_HOST=redis,REDIS_PORT=6379 \
+            --concurrency 10
+
+          yc serverless container revision deploy \
+            --container-id $REDIS_ID \
+            --image cr.yandex/$YC_REGISTRY_ID/redis:${{ github.sha }} \
+            --service-account-id $(yc iam service-account get --name weather-service-account --format json | jq -r '.id') \
+            --environment REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD:-redis }} \
+            --concurrency 10
+
+          yc serverless container revision deploy \
+            --container-id $PROMETHEUS_ID \
+            --image cr.yandex/$YC_REGISTRY_ID/prometheus:${{ github.sha }} \
+            --service-account-id $(yc iam service-account get --name weather-service-account --format json | jq -r '.id') \
+            --concurrency 10
+
+          yc serverless container revision deploy \
+            --container-id $GRAFANA_ID \
+            --image cr.yandex/$YC_REGISTRY_ID/grafana:${{ github.sha }} \
+            --service-account-id $(yc iam service-account get --name weather-service-account --format json | jq -r '.id') \
+            --concurrency 10
+
+          yc serverless container revision deploy \
+            --container-id $REDIS_EXPORTER_ID \
+            --image cr.yandex/$YC_REGISTRY_ID/redis-exporter:${{ github.sha }} \
+            --service-account-id $(yc iam service-account get --name weather-service-account --format json | jq -r '.id') \
+            --environment REDIS_ADDR=redis:6379,REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD:-redis }} \
+            --concurrency 10
+
+          yc serverless container revision deploy \
+            --container-id $CADVISOR_ID \
+            --image cr.yandex/$YC_REGISTRY_ID/cadvisor:${{ github.sha }} \
+            --service-account-id $(yc iam service-account get --name weather-service-account --format json | jq -r '.id') \
+            --concurrency 10
+
+          # Разрешение публичного доступа (опционально)
+          yc serverless container allow-unauthenticated-invoke --name weather-frontend
+          yc serverless container allow-unauthenticated-invoke --name weather-backend
