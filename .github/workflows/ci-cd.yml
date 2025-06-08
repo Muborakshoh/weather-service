@@ -28,8 +28,15 @@ jobs:
 
       - name: Login to Yandex Cloud Container Registry
         run: |
+          # Установка Yandex Cloud CLI
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -a
+          export PATH=$PATH:$HOME/.local/bin
+          # Проверка установки
+          yc --version || { echo "Yandex Cloud CLI installation failed"; exit 1; }
+
+          # Аутентификация
           echo '${{ secrets.YC_SERVICE_ACCOUNT_KEY }}' > yc-key.json
-          yc --no-user-output container registry configure-docker --iam-key-file yc-key.json
+          yc config set service-account-key yc-key.json
 
       - name: Build and push Docker images
         run: |
@@ -84,7 +91,9 @@ jobs:
       - name: Install Yandex Cloud CLI
         run: |
           curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -a
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          export PATH=$PATH:$HOME/.local/bin
+          # Проверка установки
+          yc --version || { echo "Yandex Cloud CLI installation failed"; exit 1; }
 
       - name: Authenticate to Yandex Cloud
         run: |
