@@ -1,14 +1,9 @@
-name: CI/CD Pipeline for Kubernetes on Yandex Cloud
+name: Deploy to Yandex Cloud Kubernetes
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
-env:
-  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-  YC_REGISTRY_ID: ${{ secrets.YC_REGISTRY_ID }}
+    branches:
+      - main
 
 jobs:
   build-and-push:
@@ -20,134 +15,44 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      - name: Login to Docker Hub
+      - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Install and Configure Yandex Cloud CLI
+      - name: Build and push backend
         run: |
-          # Установка Yandex Cloud CLI
-          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -a
-          # Установка явного пути к yc
-          YC_BINARY="/home/runner/.local/bin/yc"
-          if [ -f "$YC_BINARY" ]; then
-            export PATH=$PATH:/home/runner/.local/bin
-            chmod +x "$YC_BINARY"
-            "$YC_BINARY" --version || { echo "Yandex Cloud CLI version check failed"; exit 1; }
-          else
-            echo "Yandex Cloud CLI binary not found at $YC_BINARY"
-            exit 1
-          fi
+          docker build -t i20020309/weather-service-backend:updated-country ./backend
+          docker push i20020309/weather-service-backend:updated-country
 
-          # Аутентификация
-          echo '${{ secrets.YC_SERVICE_ACCOUNT_KEY }}' > yc-key.json
-          "$YC_BINARY" config set service-account-key yc-key.json
-
-      - name: Build and push Docker images
+      - name: Build and push frontend
         run: |
-          # Сборка и тегирование образов
-          docker build -t $DOCKERHUB_USERNAME/weather-service-backend:updated-country ./backend
-          docker build -t $DOCKERHUB_USERNAME/weather-service-frontend:html-js-css ./frontend
-          docker build -t $DOCKERHUB_USERNAME/weather-service-bot:latest ./bot
-          docker tag redis:7 $DOCKERHUB_USERNAME/redis:7
-          docker tag prom/prometheus:latest $DOCKERHUB_USERNAME/prometheus:latest
-          docker tag grafana/grafana:latest $DOCKERHUB_USERNAME/grafana:latest
-          docker tag oliver006/redis_exporter:latest $DOCKERHUB_USERNAME/redis-exporter:latest
-          docker tag gcr.io/cadvisor/cadvisor:latest $DOCKERHUB_USERNAME/cadvisor:latest
+          docker build -t i20020309/weather-service-frontend:html-js-css ./frontend
+          docker push i20020309/weather-service-frontend:html-js-css
 
-          # Пуш в Docker Hub
-          docker push $DOCKERHUB_USERNAME/weather-service-backend:updated-country
-          docker push $DOCKERHUB_USERNAME/weather-service-frontend:html-js-css
-          docker push $DOCKERHUB_USERNAME/weather-service-bot:latest
-          docker push $DOCKERHUB_USERNAME/redis:7
-          docker push $DOCKERHUB_USERNAME/prometheus:latest
-          docker push $DOCKERHUB_USERNAME/grafana:latest
-          docker push $DOCKERHUB_USERNAME/redis-exporter:latest
-          docker push $DOCKERHUB_USERNAME/cadvisor:latest
-
-          # Тегирование для Yandex Container Registry
-          docker tag $DOCKERHUB_USERNAME/weather-service-backend:updated-country cr.yandex/$YC_REGISTRY_ID/weather-service-backend:updated-country
-          docker tag $DOCKERHUB_USERNAME/weather-service-frontend:html-js-css cr.yandex/$YC_REGISTRY_ID/weather-service-frontend:html-js-css
-          docker tag $DOCKERHUB_USERNAME/weather-service-bot:latest cr.yandex/$YC_REGISTRY_ID/weather-service-bot:latest
-          docker tag $DOCKERHUB_USERNAME/redis:7 cr.yandex/$YC_REGISTRY_ID/redis:7
-          docker tag $DOCKERHUB_USERNAME/prometheus:latest cr.yandex/$YC_REGISTRY_ID/prometheus:latest
-          docker tag $DOCKERHUB_USERNAME/grafana:latest cr.yandex/$YC_REGISTRY_ID/grafana:latest
-          docker tag $DOCKERHUB_USERNAME/redis-exporter:latest cr.yandex/$YC_REGISTRY_ID/redis-exporter:latest
-          docker tag $DOCKERHUB_USERNAME/cadvisor:latest cr.yandex/$YC_REGISTRY_ID/cadvisor:latest
-
-          # Пуш в Yandex Container Registry
-          docker push cr.yandex/$YC_REGISTRY_ID/weather-service-backend:updated-country
-          docker push cr.yandex/$YC_REGISTRY_ID/weather-service-frontend:html-js-css
-          docker push cr.yandex/$YC_REGISTRY_ID/weather-service-bot:latest
-          docker push cr.yandex/$YC_REGISTRY_ID/redis:7
-          docker push cr.yandex/$YC_REGISTRY_ID/prometheus:latest
-          docker push cr.yandex/$YC_REGISTRY_ID/grafana:latest
-          docker push cr.yandex/$YC_REGISTRY_ID/redis-exporter:latest
-          docker push cr.yandex/$YC_REGISTRY_ID/cadvisor:latest
+      - name: Build and push bot
+        run: |
+          docker build -t i20020309/weather-service-bot:latest ./bot
+          docker push i20020309/weather-service-bot:latest
 
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Install and Configure Yandex Cloud CLI
-        run: |
-          # Установка Yandex Cloud CLI
-          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -a
-          # Установка явного пути к yc
-          YC_BINARY="/home/runner/.local/bin/yc"
-          if [ -f "$YC_BINARY" ]; then
-            export PATH=$PATH:/home/runner/.local/bin
-            chmod +x "$YC_BINARY"
-            "$YC_BINARY" --version || { echo "Yandex Cloud CLI version check failed"; exit 1; }
-          else
-            echo "Yandex Cloud CLI binary not found at $YC_BINARY"
-            exit 1
-          fi
-
-          # Аутентификация
-          echo '${{ secrets.YC_SERVICE_ACCOUNT_KEY }}' > yc-key.json
-          "$YC_BINARY" config set service-account-key yc-key.json
-
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v3
-
-      - name: Configure kubeconfig
-        run: |
-          echo '${{ secrets.KUBE_CONFIG }}' | base64 -d > kubeconfig.yaml
-          export KUBECONFIG=$PWD/kubeconfig.yaml
-
-      - name: Deploy to Kubernetes
-        run: |
-          # Применение всех манифестов
-          kubectl apply -f k8s/redis-deployment.yaml
-          kubectl apply -f k8s/bot-deployment.yaml
-          kubectl apply -f k8s/frontend-deployment.yaml
-          kubectl apply -f k8s/redis-exporter-deployment.yaml
-          kubectl apply -f k8s/grafana-deployment.yaml
-          kubectl apply -f k8s/backend-deployment.yaml
-          kubectl apply -f k8s/prometheus-deployment.yaml
-
-          # Проверка статуса подов
-          kubectl rollout status deployment/redis -n default
-          kubectl rollout status deployment/bot -n default
-          kubectl rollout status deployment/frontend -n default
-          kubectl rollout status deployment/redis-exporter -n default
-          kubectl rollout status deployment/grafana -n default
-          kubectl rollout status deployment/backend -n default
-          kubectl rollout status deployment/prometheus -n default
-
-      - name: Verify Deployment
-        run: |
-          sleep 30  # Ждём инициализацию
-          FRONTEND_IP=$(kubectl get service frontend -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-          if [ -n "$FRONTEND_IP" ]; then
-            curl -f http://$FRONTEND_IP || echo "Deployment verification failed, check Kubernetes logs"
-          else
-            echo "Frontend IP not found, deployment might have failed"
-          fi
+      - name: Deploy to Yandex Kubernetes
+        uses: azure/k8s-deploy@v4
+        with:
+          manifests: |
+            k8s/backend-deployment.yaml
+            k8s/grafana-deployment.yaml
+            k8s/bot-deployment.yaml
+            k8s/redis-exporter-deployment.yaml
+            k8s/frontend-deployment.yaml
+            k8s/weather-secrets.yaml
+            k8s/redis-deployment.yaml
+            k8s/prometheus-deployment.yaml
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
