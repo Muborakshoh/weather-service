@@ -18,20 +18,23 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      # 3. Логин в Railway
+      # 3. Установка Railway CLI
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
+      # 4. Аутентификация с Railway через токен
       - name: Authenticate with Railway
-        run: railway login --token ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          echo "RAILWAY_TOKEN=${{ secrets.RAILWAY_TOKEN }}" >> $GITHUB_ENV
+          railway link --project 6c9e7a22-30dc-4a1f-b84f-3c19f4125a17
 
-      # 4. Установка переменных окружения
+      # 5. Установка переменных окружения
       - name: Set environment variables
         run: |
           echo "OPENWEATHERMAP_API_KEY=${{ secrets.OPENWEATHERMAP_API_KEY }}" >> .env
           echo "TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }}" >> .env
 
-      # 5. Деплой всех сервисов
+      # 6. Деплой всех сервисов
       - name: Deploy Backend
         run: railway up --service backend --dockerfile ./backend/Dockerfile --env .env
 
@@ -56,7 +59,7 @@ jobs:
       - name: Deploy cAdvisor
         run: railway up --service cadvisor --image gcr.io/cadvisor/cadvisor:latest --env .env
 
-      # 6. Настройка переменных и зависимостей
+      # 7. Настройка переменных и зависимостей
       - name: Configure service variables
         run: |
           railway service variable set REDIS_HOST=redis --service backend
@@ -66,7 +69,7 @@ jobs:
           railway service variable set REDIS_PORT=6379 --service bot
           railway service variable set REDIS_ADDR=redis:6379 --service redis-exporter
 
-      # 7. Настройка конфигурации Prometheus (если нужно)
+      # 8. Настройка конфигурации Prometheus (если нужно)
       - name: Configure Prometheus
         run: |
           railway service volume create --name prometheus-data --service prometheus
